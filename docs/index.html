@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>미너비니 KR · 트레이딩 터미널</title>
+<meta name="description" content="마크 미너비니 Trend Template과 VCP 기준 코스피·코스닥 자동 스크리너">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar" id="topbar">
+  <div class="brand">
+    <svg class="brand-mark" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M2 15 L6 13 L9 14 L12 11 L14.5 12 L16.5 9.5 L18 10.5 L22 4"
+            stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="22" cy="4" r="2.4" fill="currentColor"/>
+      <path d="M2 20 L22 20" stroke="currentColor" stroke-width="1" opacity="0.25"/>
+    </svg>
+    <div class="brand-text">
+      <span class="brand-name">MINERVINI·KR</span>
+      <span class="brand-sub">시장 판단 터미널</span>
+    </div>
+  </div>
+  <div class="regime-strip" id="regimeStrip"></div>
+  <div class="topbar-right">
+    <div class="asof">
+      <span class="asof-label">기준일</span>
+      <span class="asof-date" id="asofDate">–</span>
+      <span class="asof-stamp" id="stamp"></span>
+    </div>
+    <div class="history-picker">
+      <select id="datePicker" class="date-select" aria-label="과거 날짜 조회"></select>
+      <span class="history-icon" aria-hidden="true">↺</span>
+    </div>
+  </div>
+</header>
+
+<div id="loading" class="loading-skeleton">
+  <div class="sk-topbar"><span class="sk-line" style="width:180px"></span><span class="sk-line" style="width:520px"></span></div>
+  <div class="sk-grid">
+    <div class="sk-col"><span class="sk-block" style="height:44px"></span><span class="sk-block" style="height:64px"></span><span class="sk-block" style="height:64px"></span><span class="sk-block" style="height:64px"></span></div>
+    <div class="sk-col"><span class="sk-block" style="flex:1"></span></div>
+    <div class="sk-col"><span class="sk-block" style="height:80px"></span><span class="sk-block" style="height:56px"></span><span class="sk-block" style="height:56px"></span></div>
+  </div>
+</div>
+<div id="error" class="error" hidden></div>
+<div id="demoBanner" class="demo-banner" hidden>
+  데모 데이터입니다. 화면의 종목은 실존하지 않습니다.
+  실제 데이터는 실행 메뉴에서 <b>2번</b> 적재 후 <b>3번</b> 스크리닝으로 생성됩니다.
+</div>
+
+<main id="app" class="grid" hidden>
+
+  <section class="pane pane-left">
+    <div class="pane-head">
+      <h2>워치리스트</h2>
+      <div class="seg" id="listSeg">
+        <button class="seg-btn is-on" data-view="setup">셋업 <b id="cntSetup">0</b></button>
+        <button class="seg-btn" data-view="stage1">관심 <b id="cntStage1">0</b></button>
+      </div>
+    </div>
+    <div class="pane-filter">
+      <div class="chips" id="marketChips">
+        <button class="chip is-on" data-market="ALL">전체</button>
+        <button class="chip" data-market="KOSPI">코스피</button>
+        <button class="chip" data-market="KOSDAQ">코스닥</button>
+      </div>
+      <input type="search" id="search" placeholder="종목·코드" aria-label="검색">
+    </div>
+    <div class="list" id="watchList" role="listbox" tabindex="0"
+         aria-label="종목 목록. 위아래 화살표로 이동."></div>
+    <p class="list-hint">↑↓ 이동 · Enter 상세 · / 검색</p>
+  </section>
+
+  <section class="pane pane-center">
+    <div id="chartHead" class="chart-head"></div>
+    <div id="chartWrap" class="chart-wrap">
+      <div id="ohlcReadout" class="ohlc-readout"></div>
+      <div class="chart-empty" id="chartEmpty">종목을 선택하면 차트가 표시됩니다.</div>
+      <canvas id="priceChart" hidden></canvas>
+      <canvas id="volChart" hidden></canvas>
+    </div>
+    <div id="detailStrip" class="detail-strip"></div>
+  </section>
+
+  <section class="pane pane-right">
+    <div class="pane-head"><h2>시장 내부</h2></div>
+    <div id="internals" class="internals"></div>
+    <div class="pane-head pane-head-sub"><h2>섹터 리더십</h2>
+      <span class="sub-note">RS 중앙값 순</span></div>
+    <div id="sectorHeat" class="sector-heat"></div>
+  </section>
+</main>
+
+<div class="sheet-scrim" id="scrim" hidden></div>
+<aside class="sheet" id="sheet" hidden aria-label="종목 상세">
+  <button class="sheet-close" id="sheetClose" aria-label="닫기">✕</button>
+  <div id="sheetBody"></div>
+</aside>
+
+<script src="app.js"></script>
+</body>
+</html>

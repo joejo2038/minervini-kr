@@ -1,0 +1,115 @@
+name: 일일 스크리닝
+
+on:
+  schedule:
+    # 19:00 KST = 10:00 UTC. 평일만.
+    # 장 마감은 15:30이지만 투자자별 수급이 확정되는 데 시간이 걸립니다.
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: '전체 재적재 (최초 1회 또는 DB 손상 시)'
+        type: boolean
+        default: false
+
+# 결과 JSON을 저장소에 커밋하려면 쓰기 권한이 필요합니다.
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-screen
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TZ: Asia/Seoul
+      DART_API_KEY: ${{ secrets.DART_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 날짜 키 생성
+        id: date
+        run: echo "today=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      # DB를 캐시에 둡니다. 저장소에 커밋하면 매일 수십 MB씩 히스토리가 쌓입니다.
+      # 캐시가 만료되면 아래 단계에서 자동으로 백필합니다.
+      - name: DB 캐시 복원
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: market-db-${{ steps.date.outputs.today }}
+          restore-keys: |
+            market-db-
+
+      - name: 백필 여부 판단
+        id: check
+        run: |
+          if [ "${{ inputs.backfill }}" = "true" ] || [ ! -f data/market.duckdb ]; then
+            echo "need_backfill=true" >> "$GITHUB_OUTPUT"
+            echo "DB가 없거나 백필이 요청되었습니다. 전체 적재를 실행합니다."
+          else
+            echo "need_backfill=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 전체 적재
+        if: steps.check.outputs.need_backfill == 'true'
+        run: python run_screen.py --backfill
+
+      - name: 증분 갱신 및 스크리닝
+        if: steps.check.outputs.need_backfill != 'true'
+        run: python run_screen.py
+
+      - name: 결과 커밋
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if git diff --staged --quiet; then
+            echo "변경 사항이 없습니다."
+          else
+            git commit -m "스크리닝 결과 ${{ steps.date.outputs.today }}"
+            # 동시 실행 충돌 대비
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push
+          fi
+
+      - name: 요약 출력
+        if: always()
+        run: |
+          if [ -f docs/data/latest.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          d = json.loads(pathlib.Path("docs/data/latest.json").read_text(encoding="utf-8"))
+          s, r = d["stats"], d["regime"]
+          verdict = {"risk_on":"정상 진입","neutral":"중립",
+                     "caution":"선별 진입","risk_off":"관망"}.get(r["verdict"], r["verdict"])
+          print(f"## {d['as_of']} 스크리닝 결과\n")
+          print(f"**시장 국면 · {verdict}** — 200일선 위 {r['breadth_above_ma200']}%\n")
+          print(f"유니버스 {s['universe']} → 1단계 {s['stage1']} → 셋업 {s['stage2']} (돌파 {s['breakout']})\n")
+          if d["stage2"]:
+              print("| 신호 | 종목 | RS | VCP | 피벗까지 |")
+              print("|---|---|---|---|---|")
+              for row in d["stage2"][:15]:
+                  v = row["vcp"]
+                  tag = "돌파" if row["signal"] == "breakout" else "셋업"
+                  dist = v.get("dist_to_pivot_pct")
+                  print(f"| {tag} | {row['name']} ({row['code']}) | {row['rs_rating']} | "
+                        f"{v['score']} | {dist if dist is not None else '-'}% |")
+          else:
+              print("_오늘 성립한 셋업이 없습니다._")
+          PY
+          fi

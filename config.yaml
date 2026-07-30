@@ -1,0 +1,162 @@
+# =============================================================
+# Minervini KR Screener - 설정
+# 모든 임계값은 여기서만 조정합니다. 코드는 건드리지 마세요.
+# =============================================================
+
+data:
+  db_path: "data/market.duckdb"
+  # 최초 백필 기간.
+  # 지표 계산에 필요한 최소치는 약 1.2년(MA200 + RS 252일)입니다.
+  # 2년이면 충분한 여유가 있고, 3년 대비 다운로드 시간이 3분의 2로 줄어듭니다.
+  backfill_years: 2
+  # 병렬 다운로드 워커 수.
+  # KRX는 과도한 동시 요청을 차단합니다. 12를 넘기지 마세요.
+  # 느리다고 느껴지면 10까지는 올려도 됩니다.
+  max_workers: 10
+  # 재시도
+  retry: 2
+  retry_sleep_sec: 1.0
+
+universe:
+  markets: ["KOSPI", "KOSDAQ"]
+  # 시가총액 하한 (억원). 소형주는 슬리피지 때문에 신호가 나와도 못 삽니다.
+  min_marcap_eok: 1000
+  # 20일 평균 거래대금 하한 (억원). 유동성 필터.
+  min_avg_value_eok: 10
+  # 상장 후 최소 거래일. 52주 데이터가 있어야 Trend Template 계산 가능.
+  min_listed_days: 260
+  # 주가 하한 (원). 동전주 제외.
+  min_price: 1000
+  exclude_preferred: true      # 우선주
+  exclude_spac: true           # 스팩
+  exclude_etf_etn_reit: true   # ETF/ETN/리츠
+  exclude_admin_issue: true    # 관리종목·투자주의환기
+  # 종목명에 아래 키워드가 있으면 제외
+  name_blacklist: ["스팩", "리츠", "우B", "전환우", "ETN"]
+
+rs:
+  # IBD 방식 가중 수익률 기간 (거래일)
+  periods: [63, 126, 189, 252]
+  weights: [0.4, 0.2, 0.2, 0.2]
+  # 시장별로 랭킹을 분리할지 여부.
+  # false = KOSPI+KOSDAQ 통합 랭킹 (미너비니 원안에 가까움)
+  # true  = 시장별 분리 (코스닥 테마주가 상단을 독식하는 걸 막고 싶을 때)
+  rank_by_market: false
+
+trend_template:
+  ma_short: 50
+  ma_mid: 150
+  ma_long: 200
+  # 조건3: MA200이 상승 추세인지 판정할 기간 (거래일)
+  ma_long_rising_days: 22
+  # 조건3 강화 옵션: 해당 기간 중 상승한 날의 최소 비율
+  ma_long_rising_ratio: 0.6
+  # 조건6: 52주 최저 대비 최소 상승률
+  min_above_52w_low: 0.30
+  # 조건7: 52주 최고 대비 최대 하락률 (0.25 = 고점 -25% 이내)
+  max_below_52w_high: 0.25
+  # 조건8: RS Rating 하한
+  min_rs_rating: 70
+  # 8개 조건 중 최소 몇 개를 통과해야 1단계 통과로 볼지.
+  # 8 = 전조건 충족 (원안). 7로 낮추면 후보가 크게 늘어납니다.
+  required_conditions: 8
+
+vcp:
+  # 베이스 탐색 구간 (거래일)
+  lookback_days: 120
+  min_base_days: 15
+  max_base_days: 120
+  # 지그재그 스윙 판정 임계값. 한국 시장은 변동성이 커서 미국(3~4%)보다 높게 잡습니다.
+  swing_threshold: 0.05
+  # 최소 수축 횟수 (T1 > T2 > ... 형태)
+  min_contractions: 2
+  max_contractions: 5
+  # 첫 수축(가장 깊은 조정)의 최대 허용 깊이.
+  # 한국은 상하한가 30% 구조라 미국 원안(0.35)보다 여유를 줍니다.
+  max_first_depth: 0.40
+  # 마지막 수축의 최대 깊이. 이게 타이트해야 진짜 VCP입니다.
+  max_last_depth: 0.15
+  # 수축이 줄어드는지 판정할 때 허용 오차 (1.0 = 무조건 감소해야 함)
+  contraction_tolerance: 1.0
+  # 마지막 수축 거래량 / 첫 수축 거래량 상한. 수축과 함께 거래량도 말라야 합니다.
+  max_volume_ratio: 0.80
+  # 최근 5일 평균 거래량 / 50일 평균 거래량. 피벗 직전 거래량 고갈.
+  max_dryup_ratio: 0.85
+  # 현재가가 피벗 -8% 이내여야 워치리스트에 올립니다.
+  max_dist_to_pivot: 0.08
+  # 피벗 위로 이만큼 넘게 뻗은 종목은 이미 늦었습니다.
+  # 미너비니가 반복해서 경고하는 '연장(extended)' 상태입니다.
+  max_extended_above_pivot: 0.05
+  # 돌파 판정: 종가가 피벗 상회 + 거래량이 50일 평균 대비 배수
+  breakout_volume_mult: 1.5
+
+flows:
+  # 수급 누적 기간 (거래일)
+  window: 20
+  # 기관+외국인 합산 순매수가 양수여야 통과
+  require_net_positive: true
+  # 필수 조건으로 쓸지, 점수에만 반영할지
+  hard_filter: false
+
+fundamentals:
+  # 적자 기업 제외 (EPS <= 0)
+  require_profitable: true
+  # PER 상한. 0 또는 null이면 미적용. 성장주는 고PER이 정상이라 느슨하게.
+  max_per: 0
+  # DART 분기 실적 연동 (선택). API 키가 없으면 자동으로 건너뜁니다.
+  # 무료 발급: https://opendart.fss.or.kr
+  dart_enabled: false
+  dart_api_key_env: "DART_API_KEY"
+  # 최근 분기 EPS 전년동기 대비 증가율 하한
+  min_eps_growth_yoy: 0.20
+
+regime:
+  # 시장 국면 판정에 쓸 지수
+  kospi_code: "1001"
+  kosdaq_code: "2001"
+  ma_short: 50
+  ma_long: 200
+  # 전체 종목 중 MA200 위에 있는 비율이 이 아래면 위험 국면
+  breadth_caution: 0.40
+  breadth_risk_off: 0.25
+
+backtest:
+  # --- 자금 ---
+  initial_capital: 100000000      # 1억원
+  risk_per_trade_pct: 0.5         # 거래당 감수할 자산 비율. 미너비니는 0.25~1.25% 권장
+  max_position_pct: 25            # 한 종목 최대 비중
+  max_open_positions: 8           # 동시 보유 종목 수
+
+  # --- 진입 ---
+  # 손절까지 거리가 이보다 멀면 셋업이 덜 여문 것으로 보고 건너뜁니다.
+  max_stop_distance_pct: 12
+  # false = 돌파 당일 종가 진입 (장 마감 매수)
+  # true  = 다음날 시가 진입 (더 보수적, 갭 리스크 반영)
+  entry_on_next_open: false
+  # 관망 국면에서 신규 진입을 막을지. 이 스위치를 껐다 켜서
+  # "국면이 나쁠 때 쉬어라"가 실제로 맞는지 검증할 수 있습니다.
+  respect_regime: true
+
+  # --- 청산 ---
+  breakeven_at_pct: 8             # 이 수익률 도달 시 손절선을 진입가로
+  trail_with_ma50: true           # 이후 50일선 추적 손절
+  time_stop_days: 25              # 이 기간 안에
+  time_stop_min_gain_pct: 3       # 이만큼 못 오르면 정리
+  max_hold_days: 120
+  target_pct: 0                   # 0이면 목표가 미사용 (추세 추종)
+
+  # --- 비용 ---
+  fee_pct: 0.015                  # 편도 수수료
+  sell_tax_pct: 0.18              # 매도 시 증권거래세 + 농특세
+  slippage_pct: 0.15              # 체결 미끄러짐
+
+output:
+  json_path: "docs/data/latest.json"
+  history_dir: "docs/data/history"
+  keep_history_days: 120
+  # 1단계 통과 종목을 JSON에 최대 몇 개까지 담을지
+  max_stage1_rows: 400
+  # 실제 캔들 차트에 담을 최근 거래일 수
+  chart_days: 160
+  # 시장 내부 지표 시계열로 내보낼 최근 거래일 수 (900이면 약 3.5년)
+  internals_days: 900

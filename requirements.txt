@@ -1,0 +1,10 @@
+pandas>=2.0.0
+numpy>=1.24.0
+duckdb>=0.10.0
+pyarrow>=14.0.0
+finance-datareader>=0.9.50
+pykrx>=1.0.45
+PyYAML>=6.0
+requests>=2.31.0
+certifi>=2024.2.2
+tqdm>=4.66.0
