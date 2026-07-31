@@ -129,10 +129,12 @@ b { font-weight: 600; }
 
 .topbar-right { display: flex; align-items: center; gap: var(--s4); flex-shrink: 0; margin-left: auto; }
 
-.asof { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
-.asof-label { font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
-.asof-date { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
-.asof-stamp { font-family: var(--mono); font-size: 9px; color: var(--text-4); margin-top: 1px; }
+.today { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.today-line { display: flex; align-items: baseline; gap: 5px; }
+.today-date { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
+.today-wd { font-size: 11px; color: var(--text-3); }
+.date-sub { font-family: var(--mono); font-size: 9px; color: var(--text-4); margin-top: 1px; }
+.date-sub.warn { color: var(--sig-warn); }
 
 .history-picker { position: relative; display: flex; align-items: center; }
 .history-picker .history-icon {
@@ -359,17 +361,84 @@ b { font-weight: 600; }
 
 .sh-name { font-size: 22px; font-weight: 600; }
 .sh-code { font-family: var(--mono); font-size: 12px; color: var(--text-3); }
-.sh-section { margin-top: var(--s5); }
-.sh-section h3 { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--hairline); }
+.sh-section, .sh-sec { margin-top: var(--s5); }
+.sh-section h3, .sh-sec h3 { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--hairline); }
 .kv { display: flex; justify-content: space-between; padding: var(--s2) 0; font-size: 13px; }
 .kv dt { color: var(--text-3); }
 .kv dd { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .cond-list { list-style: none; }
-.cond-item { display: flex; align-items: center; gap: var(--s3); padding: 5px 0; font-size: 12px; }
+.cond-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px var(--s3); }
+.cond-item { display: flex; align-items: center; gap: var(--s2); padding: 5px 0; font-size: 12px; }
 .cond-flag { width: 15px; height: 15px; border-radius: 3px; display: grid; place-items: center; font-size: 9px; flex-shrink: 0; }
 .cond-flag.yes { background: rgba(70,185,138,0.16); color: var(--sig-ok); }
 .cond-flag.no  { background: rgba(241,101,96,0.13); color: var(--up); }
 .sh-note { margin-top: var(--s3); padding: var(--s3); background: var(--surface-2); border-left: 2px solid var(--accent-dim); border-radius: 0 var(--r) var(--r) 0; font-size: 12px; color: var(--text-2); line-height: 1.6; }
+
+/* ===== 매매 플랜 (상세 시트의 주인공) ===== */
+.sh-plan-empty {
+  margin: var(--s4) 0; padding: var(--s4);
+  background: var(--surface-2); border: 1px solid var(--hairline);
+  border-radius: var(--r-lg); text-align: center;
+  font-size: 12px; color: var(--text-3); line-height: 1.7;
+}
+.trade-plan {
+  margin: var(--s4) 0 var(--s5);
+  padding: var(--s4);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--r-lg);
+}
+.plan-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s4); }
+.plan-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-2); }
+.plan-badge { font-size: 10px; padding: 3px 9px; border-radius: 100px; font-weight: 600; }
+.plan-badge.live { background: var(--up-dim); color: var(--up); }
+.plan-badge.wait { background: var(--surface-3); color: var(--text-3); }
+
+.plan-levels { display: flex; flex-direction: column; gap: 1px; margin-bottom: var(--s4); }
+.lvl {
+  display: grid; grid-template-columns: 40px 1fr auto; gap: var(--s3);
+  align-items: baseline; padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--hairline-2); background: var(--surface-1);
+}
+.lvl-target { border-left-color: var(--up); border-radius: var(--r) var(--r) 0 0; }
+.lvl-entry  { border-left-color: var(--accent); background: var(--surface-3); }
+.lvl-stop   { border-left-color: var(--down); border-radius: 0 0 var(--r) var(--r); }
+.lvl-tag { font-size: 10px; color: var(--text-3); }
+.lvl-price { font-family: var(--mono); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lvl-pct { font-family: var(--mono); font-size: 11px; text-align: right; }
+
+.plan-rr { margin-bottom: var(--s4); }
+.rr-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 6px; }
+.rr-risk { background: var(--down); opacity: 0.7; }
+.rr-reward { background: var(--up); opacity: 0.7; }
+.rr-label { font-size: 11px; color: var(--text-2); }
+.rr-label b { font-family: var(--mono); font-size: 13px; color: var(--text); }
+
+/* 포지션 계산기 */
+.pos-calc { border-top: 1px solid var(--hairline); padding-top: var(--s4); }
+.pos-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s3); }
+.pos-row label { font-size: 11px; color: var(--text-3); }
+.pos-input { display: flex; align-items: center; gap: 6px; }
+.pos-input input {
+  width: 96px; text-align: right;
+  background: var(--surface-3); color: var(--text);
+  border: 1px solid var(--hairline-2); border-radius: var(--r);
+  padding: 6px 9px; font-family: var(--mono); font-size: 13px;
+}
+.pos-input input:focus { outline: none; border-color: var(--accent-dim); }
+.pos-input span { font-size: 11px; color: var(--text-3); }
+.pos-seg { display: inline-flex; background: var(--surface-3); border-radius: var(--r); padding: 2px; }
+.pos-seg button { padding: 5px 11px; border-radius: 4px; font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.pos-seg button.on { background: var(--surface-1); color: var(--accent); }
+
+.pos-result { margin-top: var(--s3); }
+.pos-out { padding: var(--s3); background: var(--surface-1); border: 1px solid var(--hairline); border-radius: var(--r); }
+.pos-big { font-size: 13px; color: var(--text-3); margin-bottom: var(--s3); }
+.pos-big span { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--text); margin-right: 4px; }
+.pos-kv { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; }
+.pos-kv dt { color: var(--text-3); }
+.pos-kv dd { font-family: var(--mono); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pos-kv .warn { color: var(--sig-warn); }
 
 /* ---------- 반응형 ---------- */
 

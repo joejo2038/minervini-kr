@@ -86,8 +86,7 @@ async function load(url) {
 
 function render() {
   $('demoBanner').hidden = !S.data.demo;
-  $('stamp').textContent = '갱신 ' + (S.data.generated_at || '').replace('T', ' ').slice(5, 16);
-  $('asofDate').textContent = S.data.as_of || '–';
+  renderDateInfo();
   renderRegime();
   renderInternals();
   renderSectors();
@@ -100,6 +99,36 @@ function render() {
     renderChart(S.selected);
   } else {
     renderMarketHero();
+  }
+}
+
+function renderDateInfo() {
+  // 오늘 날짜(실행일)를 크게. 데이터가 며칠 밀렸으면 그때만 경고를 붙인다.
+  const gen = S.data.generated_at ? new Date(S.data.generated_at) : new Date();
+  const asOf = S.data.as_of ? new Date(S.data.as_of + 'T00:00:00') : null;
+
+  const wd = ['일','월','화','수','목','금','토'][gen.getDay()];
+  const y = gen.getFullYear();
+  const m = String(gen.getMonth()+1).padStart(2,'0');
+  const d = String(gen.getDate()).padStart(2,'0');
+  $('asofDate').textContent = `${y}-${m}-${d}`;
+  $('asofWd').textContent = `(${wd})`;
+
+  const sub = $('dateSub');
+  if (asOf) {
+    const genDay = new Date(gen.getFullYear(), gen.getMonth(), gen.getDate());
+    const lag = Math.round((genDay - asOf) / 86400000);
+    const asOfStr = S.data.as_of.slice(5);
+    if (lag >= 2) {
+      sub.className = 'date-sub warn';
+      sub.textContent = `데이터 ${asOfStr} · ${lag}일 지연`;
+    } else {
+      sub.className = 'date-sub';
+      sub.textContent = `데이터 ${asOfStr} · 최신`;
+    }
+  } else {
+    sub.className = 'date-sub';
+    sub.textContent = '';
   }
 }
 
@@ -459,7 +488,7 @@ function renderList() {
   }).join('');
 
   el.querySelectorAll('.row').forEach(node => {
-    node.onclick = () => select(node.dataset.code);
+    node.onclick = () => { select(node.dataset.code); openSheet(node.dataset.code); };
   });
 }
 
@@ -772,16 +801,15 @@ function openSheet(code) {
     return `<div class="cond-item"><span class="cond-flag ${ok?'yes':'no'}">${ok?'✓':'✕'}</span>${labels[k]}</div>`;
   }).join('');
   const v = r.vcp, f = r.flow||{}, fu = r.fund||{};
+
   $('sheetBody').innerHTML = `
     <p class="sh-name">${r.name}</p><p class="sh-code">${r.code} · ${r.market}</p>
+    ${v ? tradePlan(r, v) : `<div class="sh-plan-empty">아직 VCP 셋업이 아닙니다.<br>1단계는 통과했으나 베이스가 덜 여물었습니다.</div>`}
     <div class="sh-sec"><h3>Trend Template ${r.tt_passed}/8 · RS ${r.rs_rating??'–'}</h3>
       <div class="cond-grid">${conds}</div></div>
-    ${v ? `<div class="sh-sec"><h3>VCP · 점수 ${v.score}</h3>
-      <dl class="kv"><dt>수축</dt><dd>${v.contractions.map(c=>c.depth_pct.toFixed(1)+'%').join(' → ')}</dd></dl>
+    ${v ? `<div class="sh-sec"><h3>VCP 베이스 · 점수 ${v.score}</h3>
+      <dl class="kv"><dt>수축 단계</dt><dd>${v.contractions.map(c=>c.depth_pct.toFixed(1)+'%').join(' → ')}</dd></dl>
       <dl class="kv"><dt>베이스 길이</dt><dd>${v.base_days}일</dd></dl>
-      <dl class="kv"><dt>피벗</dt><dd>${num(v.pivot)} (${sign(v.dist_to_pivot_pct)}%)</dd></dl>
-      <dl class="kv"><dt>손절 라인</dt><dd>${num(v.stop_price)}</dd></dl>
-      <dl class="kv"><dt>진입 대비 리스크</dt><dd>${v.risk_pct??'–'}%</dd></dl>
       <dl class="kv"><dt>신호</dt><dd class="${r.signal==='breakout'?'up':''}">${r.signal==='breakout'?'돌파 발생':'셋업 대기'}</dd></dl>
     </div>`:''}
     <div class="sh-sec"><h3>수급 20일 누적</h3>
@@ -792,8 +820,127 @@ function openSheet(code) {
       <dl class="kv"><dt>PER</dt><dd>${fu.per??'–'}</dd></dl>
       <dl class="kv"><dt>PBR</dt><dd>${fu.pbr??'–'}</dd></dl>
       <dl class="kv"><dt>흑자</dt><dd>${fu.profitable==null?'–':(fu.profitable?'예':'적자')}</dd></dl></div>`;
-  $('sheet').hidden = false; $('scrim').hidden = false;
-  $('sheetClose').focus();
+
+  const wasOpen = !$('sheet').hidden;
+  $('sheet').hidden = false;
+  wirePositionCalc(r, v);
+  if (!wasOpen) $('sheetClose').focus();
+}
+
+/* 매매 플랜: 진입/손절/목표/손익비를 자동 계산해 보여준다.
+   미너비니 방식의 핵심은 진입이 아니라 리스크 관리이므로 이걸 전면에 둔다. */
+function tradePlan(r, v) {
+  const entry = v.pivot;                    // 진입 = 피벗 돌파가
+  const stop = v.stop_price;                // 손절 = 마지막 수축 저점
+  const riskPct = (entry - stop) / entry * 100;
+  // 목표: 미너비니는 손익비 최소 2~3:1을 본다. 리스크의 3배를 1차 목표로.
+  const rMultiple = 3;
+  const target = entry + (entry - stop) * rMultiple;
+  const rewardPct = (target - entry) / entry * 100;
+  const rr = (rewardPct / riskPct);
+
+  const cur = r.close;
+  const toPivot = (v.pivot / cur - 1) * 100;
+  const status = r.signal === 'breakout'
+    ? `<span class="plan-badge live">돌파 발생 · 진입 구간</span>`
+    : `<span class="plan-badge wait">피벗까지 ${sign(toPivot)}% · 대기</span>`;
+
+  return `
+    <div class="trade-plan">
+      <div class="plan-head">
+        <span class="plan-title">매매 플랜</span>
+        ${status}
+      </div>
+      <div class="plan-levels">
+        <div class="lvl lvl-target">
+          <span class="lvl-tag">목표</span>
+          <span class="lvl-price">${num(target)}</span>
+          <span class="lvl-pct up">+${rewardPct.toFixed(1)}%</span>
+        </div>
+        <div class="lvl lvl-entry">
+          <span class="lvl-tag">진입</span>
+          <span class="lvl-price">${num(entry)}</span>
+          <span class="lvl-pct dim">피벗 돌파</span>
+        </div>
+        <div class="lvl lvl-stop">
+          <span class="lvl-tag">손절</span>
+          <span class="lvl-price">${num(stop)}</span>
+          <span class="lvl-pct down">-${riskPct.toFixed(1)}%</span>
+        </div>
+      </div>
+      <div class="plan-rr">
+        <div class="rr-bar">
+          <span class="rr-risk" style="flex:${riskPct.toFixed(2)}"></span>
+          <span class="rr-reward" style="flex:${rewardPct.toFixed(2)}"></span>
+        </div>
+        <div class="rr-label">손익비 <b>${rr.toFixed(1)} : 1</b> <span class="dim">(리스크 ${riskPct.toFixed(1)}% : 보상 ${rewardPct.toFixed(1)}%)</span></div>
+      </div>
+
+      <div class="pos-calc">
+        <div class="pos-row">
+          <label>계좌 규모</label>
+          <div class="pos-input"><input id="posCapital" type="text" inputmode="numeric" value="10,000"><span>만원</span></div>
+        </div>
+        <div class="pos-row">
+          <label>거래당 리스크</label>
+          <div class="pos-seg" id="posRisk">
+            <button data-r="0.5">0.5%</button>
+            <button data-r="1" class="on">1%</button>
+            <button data-r="2">2%</button>
+          </div>
+        </div>
+        <div class="pos-result" id="posResult"></div>
+      </div>
+    </div>`;
+}
+
+function wirePositionCalc(r, v) {
+  if (!v) return;
+  const entry = v.pivot, stop = v.stop_price;
+  const capEl = $('posCapital');
+  const seg = $('posRisk');
+  if (!capEl || !seg) return;
+
+  let riskPct = 1;
+
+  const calc = () => {
+    const capital = (parseFloat(capEl.value.replace(/,/g,'')) || 0) * 10000; // 만원 → 원
+    const riskAmount = capital * riskPct / 100;
+    const perShareRisk = entry - stop;
+    if (perShareRisk <= 0 || capital <= 0) { $('posResult').innerHTML = ''; return; }
+    let shares = Math.floor(riskAmount / perShareRisk);
+    // 한 종목 최대 비중 25% 가드
+    const maxByWeight = Math.floor(capital * 0.25 / entry);
+    const capped = shares > maxByWeight;
+    shares = Math.min(shares, maxByWeight);
+    const cost = shares * entry;
+    const actualRisk = shares * perShareRisk;
+    const weight = capital > 0 ? cost / capital * 100 : 0;
+
+    $('posResult').innerHTML = `
+      <div class="pos-out">
+        <div class="pos-big"><span>${nf.format(shares)}</span>주 매수</div>
+        <dl class="pos-kv"><dt>매수 금액</dt><dd>${nf.format(Math.round(cost))}원</dd></dl>
+        <dl class="pos-kv"><dt>실제 리스크</dt><dd>${nf.format(Math.round(actualRisk))}원 · 계좌의 ${(actualRisk/capital*100).toFixed(2)}%</dd></dl>
+        <dl class="pos-kv"><dt>비중</dt><dd>${weight.toFixed(1)}%${capped?' <span class="warn">(25% 상한 적용)</span>':''}</dd></dl>
+      </div>`;
+  };
+
+  capEl.addEventListener('input', () => {
+    // 천단위 콤마 유지
+    const raw = capEl.value.replace(/[^0-9]/g,'');
+    capEl.value = raw ? nf.format(parseInt(raw)) : '';
+    calc();
+  });
+  seg.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      riskPct = parseFloat(b.dataset.r);
+      calc();
+    });
+  });
+  calc();
 }
 function closeSheet(){ $('sheet').hidden = true; $('scrim').hidden = true; }
 
