@@ -1,9 +1,13 @@
-data/
+/data/
 .venv/
 .installed
 *.duckdb
 *.duckdb.wal
 __pycache__/
 *.pyc
-.venv/
 .DS_Store
+node_modules/
+package-lock.json
+
+!docs/data/
+!docs/data/**
