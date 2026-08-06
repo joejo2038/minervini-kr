@@ -235,9 +235,24 @@ def _normalize_ohlcv(df: pd.DataFrame, code: str) -> pd.DataFrame:
 
 def fetch_ohlcv_one(code: str, start: str, end: str,
                     tries: int = 3, sleep: float = 1.5) -> pd.DataFrame:
+    """
+    한 종목 일봉. FinanceDataReader(KRX)를 우선 쓰고, 실패하거나 빈
+    응답이면 네이버 금융으로 대체한다. KRX가 해외 IP를 차단해도
+    (GitHub Actions 등) 네이버 경로로 데이터가 계속 들어온다.
+    """
     fdr = _lazy_fdr()
-    raw = _retry(lambda: fdr.DataReader(code, start, end),
-                 tries=tries, sleep=sleep, label=f"OHLCV {code}")
+    try:
+        raw = _retry(lambda: fdr.DataReader(code, start, end),
+                     tries=tries, sleep=sleep, label=f"OHLCV {code}")
+        out = _normalize_ohlcv(raw, code)
+        if not out.empty:
+            return out
+    except Exception:  # noqa: BLE001
+        out = pd.DataFrame()
+
+    # KRX가 비었거나 막혔다 → 네이버로 대체
+    from . import naver
+    raw = naver.fetch_ohlcv_one(code, start, end)
     return _normalize_ohlcv(raw, code)
 
 

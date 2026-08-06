@@ -150,6 +150,7 @@ def update(store: Store, cfg) -> None:
     else:
         cursor = last + pd.Timedelta(days=1)
         total = 0
+        snapshot_failed = False
         while cursor <= today:
             if cursor.weekday() < 5:
                 ymd = cursor.strftime("%Y%m%d")
@@ -158,7 +159,23 @@ def update(store: Store, cfg) -> None:
                     store.upsert("prices", snap, ["code", "date"])
                     total += len(snap)
                     log.info("  %s  %d종목", cursor.date(), len(snap))
+                else:
+                    snapshot_failed = True
             cursor += pd.Timedelta(days=1)
+
+        # KRX 스냅샷이 한 번도 안 들어왔다 → 차단 가능성.
+        # 종목별 재조회 경로(네이버 폴백 포함)로 공백을 메운다.
+        if total == 0 and snapshot_failed:
+            start = (last - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
+            end = today.strftime("%Y-%m-%d")
+            log.warning("KRX 스냅샷이 비었습니다. 종목별 재조회로 대체합니다 (%s ~ %s)", start, end)
+            prices = data_mod.fetch_ohlcv_bulk(
+                listing["code"].tolist(), start, end,
+                max_workers=cfg.get("data.max_workers", 8),
+            )
+            if not prices.empty:
+                store.upsert("prices", prices, ["code", "date"])
+                total = len(prices)
         log.info("증분 %d행", total)
 
     _refresh_side_tables(store, cfg, listing["code"].tolist(), full=False)
